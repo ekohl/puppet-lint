@@ -98,33 +98,14 @@ class PuppetLint
     @code = '' if @code[0..3].unpack('V').first == 0xf97cff8f
   end
 
-  # Internal: Retrieve the format string to be used when writing problems to
-  # STDOUT.  If the user has not specified a custom log format, build one for
-  # them.
-  #
-  # Returns a format String to be used with String#%.
-  def log_format
-    if configuration.log_format.nil? || configuration.log_format.empty?
-      format = '%{KIND}: %{message} on line %{line}'
-      format.prepend('%{path} - ') if configuration.with_filename
-      format.concat(' (check: %{check})')
-      configuration.log_format = format
-    end
-
-    configuration.log_format
-  end
 
   # Internal: Format a problem message and print it to STDOUT.
   #
   # message - A Hash containing all the information about a problem.
   #
   # Returns nothing.
-  def format_message(message)
-    format = log_format
-    puts format % message
-
-    puts "  #{message[:reason]}" if message[:kind] == :ignored && !message[:reason].nil?
-    print_context(message)
+  def print_message(message)
+    puts PuppetLint::Report::StdoutReporter.format_problem(configuration, message)
   end
 
   # Internal: Format a problem message and print it to STDOUT so GitHub Actions
@@ -144,22 +125,6 @@ class PuppetLint
   # Returns the problematic line as a string.
   def get_context(message)
     PuppetLint::Data.manifest_lines[message[:line] - 1].strip
-  end
-
-  # Internal: Print out the line of the manifest on which the problem was found
-  # as well as a marker pointing to the location on the line.
-  #
-  # message - A Hash containing all the information about a problem.
-  #
-  # Returns nothing.
-  def print_context(message)
-    return if message[:check] == 'documentation'
-    return if message[:kind] == :fixed
-    line = message[:context]
-    return unless line
-    offset = line.index(%r{\S}) || 1
-    puts "\n  #{line.strip}"
-    printf("%#{message[:column] + 2 - offset}s\n\n", '^')
   end
 
   # Internal: Print the reported problems with a manifest to stdout.
@@ -184,7 +149,7 @@ class PuppetLint
       json << message
 
       if print_stdout
-        format_message(message)
+        print_message(message)
         print_github_annotation(message) if configuration.github_actions
       end
     end
